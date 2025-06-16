@@ -33,9 +33,21 @@ The blessed API itself has gone on to inspire [termui][termui] for Go.
 
 ## Install
 
-``` bash
-$ npm install neo-neo-blessed
+```bash
+npm install neo-neo-blessed
 ```
+
+The core library has **zero native build dependencies**. The heavyweight
+`node-pty` module is no longer installed automatically. Everything works
+without it, except for the `Terminal` widget which needs a real PTY. If you
+use that widget, add the package yourself:
+
+```bash
+npm install node-pty
+```
+
+This version is verified to bundle and run under the [Bun](https://bun.sh)
+runtime without additional flags.
 
 ## Example
 
