@@ -388,7 +388,17 @@ Terminal.prototype.bootstrap = function (this: TerminalInterface): void {
     return;
   }
 
-  this.pty = require('node-pty').fork(this.shell, this.args, {
+  // Try to load node-pty, gracefully handle if not available
+  let nodePty;
+  try {
+    nodePty = require('node-pty');
+  } catch (e) {
+    throw new Error(
+      'node-pty is required for Terminal widget functionality. Install it with: npm install node-pty'
+    );
+  }
+
+  this.pty = nodePty.fork(this.shell, this.args, {
     name: this.termName,
     cols: this.width - this.iwidth,
     rows: this.height - this.iheight,
