@@ -91,9 +91,16 @@
     "crc-32": "^1.2.2",
     "eastasianwidth": "^0.3.0",
     "jimp": "^1.6.0",
-    "node-pty": "^1.0.0",
     "pngjs": "^7.0.0",
     "unicode-properties": "^1.4.1"
+  },
+  "peerDependencies": {
+    "node-pty": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "node-pty": {
+      "optional": true
+    }
   },
   "lint-staged": {
     "*.{js,ts,tsx,json,md}": [
