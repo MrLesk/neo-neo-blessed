@@ -13,7 +13,22 @@ import boxFactory from './box.js';
 const Box = boxFactory.Box;
 import * as xterm from '@xterm/headless';
 const XTerminal = xterm.Terminal;
-import { spawn } from 'node-pty';
+// Lazy-load node-pty only when Terminal is instantiated to avoid
+// requiring it at package import time.
+import { createRequire } from 'module';
+const _require: NodeJS.Require = (typeof require === 'function'
+  ? require
+  : createRequire(import.meta.url)) as unknown as NodeJS.Require;
+
+function getSpawn() {
+  try {
+    const pty = _require('node-pty');
+    // Support both default and named exports
+    return (pty && (pty.spawn || pty.default?.spawn)) || null;
+  } catch {
+    return null;
+  }
+}
 import { match, vcolors } from '../colors.js';
 
 /**
@@ -79,26 +94,33 @@ class Terminal extends Box {
       wordSeparator: ' ()[]{},"\':;', // Standard word separators
     });
 
-    this.pty = spawn(this.shell, this.args, {
-      cols: cols,
-      rows: rows,
-      cwd: process.env.HOME,
-    });
+    const spawn = getSpawn();
+    if (spawn) {
+      this.pty = spawn(this.shell, this.args, {
+        cols: cols,
+        rows: rows,
+        cwd: process.env.HOME,
+      });
 
-    this.term.onData(d => this.pty.write(d));
+      this.term.onData(d => this.pty && this.pty.write(d));
+    } else {
+      this.pty = null as any;
+    }
 
     // Store raw ANSI sequences with line tracking for tmux-like passthrough
     this._rawAnsiBuffer = '';
 
-    this.pty.onData(d => {
-      const data = d.toString();
+    if (this.pty && typeof this.pty.onData === 'function') {
+      this.pty.onData((d: any) => {
+        const data = d.toString();
 
-      // Store raw ANSI data - keep it organized by recent output
-      this._rawAnsiBuffer = data; // Only keep the most recent chunk for direct replay
+        // Store raw ANSI data - keep it organized by recent output
+        this._rawAnsiBuffer = data; // Only keep the most recent chunk for direct replay
 
-      // Send to xterm.js for structural processing
-      this.term.write(d);
-    });
+        // Send to xterm.js for structural processing
+        this.term.write(d);
+      });
+    }
 
     if (
       this.screen.program.input &&
@@ -114,19 +136,23 @@ class Terminal extends Box {
       );
     }
 
-    this.pty.onData(() => {
-      // Auto-scroll to bottom when new content arrives
-      if (this.term && typeof this.term.scrollToBottom === 'function') {
-        this.term.scrollToBottom();
-      }
-      setTimeout(() => this.screen.render(), 16);
-    });
+    if (this.pty && typeof this.pty.onData === 'function') {
+      this.pty.onData(() => {
+        // Auto-scroll to bottom when new content arrives
+        if (this.term && typeof this.term.scrollToBottom === 'function') {
+          this.term.scrollToBottom();
+        }
+        setTimeout(() => this.screen.render(), 16);
+      });
+    }
 
     this.on('resize', () => {
       var cols = Math.max(this.width - this.iwidth, 1);
       var rows = Math.max(this.height - this.iheight, 1);
       this.term.resize(cols, rows);
-      this.pty.resize(cols, rows);
+      if (this.pty && typeof this.pty.resize === 'function') {
+        this.pty.resize(cols, rows);
+      }
     });
 
     this.once('render', () => {
@@ -134,7 +160,9 @@ class Terminal extends Box {
       var actualRows = Math.max(this.height - this.iheight, 1);
       if (actualCols !== cols || actualRows !== rows) {
         this.term.resize(actualCols, actualRows);
-        this.pty.resize(actualCols, actualRows);
+        if (this.pty && typeof this.pty.resize === 'function') {
+          this.pty.resize(actualCols, actualRows);
+        }
       }
     });
 
