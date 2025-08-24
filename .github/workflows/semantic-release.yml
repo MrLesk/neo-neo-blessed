@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   release:
+    if: github.repository_owner == 'eirikb'
     name: Release
     runs-on: ubuntu-latest
     permissions:
