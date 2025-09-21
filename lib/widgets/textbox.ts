@@ -81,12 +81,6 @@ class Textbox extends Textarea {
 
   // Override _listener to handle textbox-specific behavior
   _listener(ch: string, key: TextboxKey): void {
-    // Handle enter key for single-line submission
-    if (key.name === 'enter') {
-      this._done(null, this.value);
-      return;
-    }
-
     // Check if this key should be ignored based on configuration
     if (this.ignoreKeys && this.ignoreKeys.length > 0) {
       // Check by key name
@@ -109,6 +103,34 @@ class Textbox extends Textarea {
           return; // Ignore this character
         }
       }
+    }
+
+    // Handle enter key for single-line submission (after ignore check)
+    if (key.name === 'enter') {
+      if (this._done) {
+        this._done(null, this.value);
+      }
+      return;
+    }
+
+    // Handle backspace for single-line textbox
+    if (key.name === 'backspace') {
+      if (this.value.length > 0) {
+        this.value = this.value.slice(0, -1);
+        this.setValue(this.value);
+      }
+      return;
+    }
+
+    // Handle delete key for single-line textbox
+    if (key.name === 'delete') {
+      // For single-line, delete removes character at cursor position
+      // Since we don't track cursor precisely, just remove from end for now
+      if (this.value.length > 0) {
+        this.value = this.value.slice(0, -1);
+        this.setValue(this.value);
+      }
+      return;
     }
 
     // For all other keys, call parent's textarea _listener
