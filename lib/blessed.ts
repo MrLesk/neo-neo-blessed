@@ -32,6 +32,10 @@ export const scrollablebox: any = (widget as any).scrollablebox;
 export const scrollabletext: any = (widget as any).scrollabletext;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const log: any = (widget as any).log;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const textbox: any = (widget as any).textbox;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const textarea: any = (widget as any).textarea;
 import * as colors from './colors.js';
 import * as unicode from './unicode.js';
 import * as helpers from './helpers.js';
