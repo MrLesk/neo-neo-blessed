@@ -509,10 +509,12 @@ declare module 'neo-neo-blessed' {
     interface TextboxOptions extends TextareaOptions {
       secret?: boolean;
       censor?: boolean;
+      ignoreKeys?: string[]; // Array of key names to ignore (e.g., ['tab', 'f1'])
     }
 
     interface TextboxInterface extends TextareaInterface {
       type: 'textbox';
+      ignoreKeys?: string[];
     }
 
     interface ButtonOptions extends BoxOptions {

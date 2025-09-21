@@ -20,6 +20,7 @@ interface TextboxOptions {
   scrollable?: boolean;
   secret?: boolean;
   censor?: boolean;
+  ignoreKeys?: string[]; // Array of key names to ignore (e.g., ['tab', 'f1'])
   [key: string]: any;
 }
 
@@ -35,6 +36,7 @@ interface TextboxInterface extends Textarea {
   type: string;
   secret?: boolean;
   censor?: boolean;
+  ignoreKeys?: string[];
   value: string;
   _value: string;
   width: number;
@@ -58,6 +60,7 @@ class Textbox extends Textarea {
   type = 'textbox';
   secret?: boolean;
   censor?: boolean;
+  ignoreKeys?: string[];
   __olistener: (ch: string, key: TextboxKey) => any;
 
   constructor(options?: TextboxOptions) {
@@ -73,23 +76,43 @@ class Textbox extends Textarea {
 
     this.secret = options.secret;
     this.censor = options.censor;
-
-    // Store original listener and override with textbox-specific behavior
-    // Defer binding until after constructor completes to ensure methods are available
-    setImmediate(() => {
-      if (typeof this._listener === 'function') {
-        this.__olistener = this._listener.bind(this);
-        this._listener = this._textboxListener.bind(this);
-      }
-    });
+    this.ignoreKeys = options.ignoreKeys || [];
   }
 
-  _textboxListener(ch: string, key: TextboxKey): any {
+  // Override _listener to handle textbox-specific behavior
+  _listener(ch: string, key: TextboxKey): void {
+    // Handle enter key for single-line submission
     if (key.name === 'enter') {
       this._done(null, this.value);
       return;
     }
-    return this.__olistener(ch, key);
+
+    // Check if this key should be ignored based on configuration
+    if (this.ignoreKeys && this.ignoreKeys.length > 0) {
+      // Check by key name
+      if (key.name && this.ignoreKeys.includes(key.name)) {
+        return; // Ignore this key
+      }
+
+      // Also check by character for special chars like tab
+      if (ch) {
+        // Map common special characters to their key names
+        const charToKeyName: { [key: string]: string } = {
+          '\t': 'tab',
+          '\x1b': 'escape',
+          '\r': 'return',
+          '\n': 'enter',
+        };
+
+        const keyName = charToKeyName[ch];
+        if (keyName && this.ignoreKeys.includes(keyName)) {
+          return; // Ignore this character
+        }
+      }
+    }
+
+    // For all other keys, call parent's textarea _listener
+    super._listener(ch, key);
   }
 
   setValue(value?: string): void {
@@ -116,8 +139,8 @@ class Textbox extends Textarea {
   }
 
   submit(): any {
-    if (!this.__listener) return;
-    return this.__listener('\r', { name: 'enter' });
+    if (!this._done) return;
+    return this._done(null, this.value);
   }
 }
 
