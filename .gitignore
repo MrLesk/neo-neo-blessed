@@ -26,3 +26,5 @@ lib/**/*.js
 # Temporary test files
 /test-all-widgets.js
 /quick-test.ts
+
+.DS_Store
