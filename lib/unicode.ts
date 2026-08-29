@@ -4,7 +4,10 @@
  * Replaces embedded unicode libraries with proper npm dependencies
  */
 
-import * as eastasianwidth from 'eastasianwidth';
+// Default import, not a namespace import: eastasianwidth is CommonJS whose
+// named exports Node cannot detect, so `import * as` yields a namespace
+// without eastAsianWidth and every width lookup throws in the ESM bundle.
+import eastasianwidth from 'eastasianwidth';
 import * as unicode from 'unicode-properties';
 
 /**
