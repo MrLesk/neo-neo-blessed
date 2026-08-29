@@ -12,15 +12,24 @@ jobs:
   publish:
     if: github.ref_name == 'no-node-pty'
     runs-on: ubuntu-latest
+    permissions:
+      # OIDC token for npm trusted publishing
+      id-token: write
+      # Create Release step
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-      
+
+      # Trusted publishing requires npm 11.5.1+
+      - name: Update npm
+        run: npm install -g npm@11
+
       - name: Install dependencies
         run: npm ci
       
@@ -44,8 +53,6 @@ jobs:
       
       - name: Publish to NPM
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       
       - name: Create Release
         uses: actions/create-release@v1
