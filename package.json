@@ -19,6 +19,7 @@
     "build:watch": "tsup --watch",
     "build:tsc": "tsc",
     "build:tests": "esbuild test/*.ts --outdir=test-dist --format=cjs --target=es2018",
+    "generate:emoji-width": "tsx scripts/generate-emoji-presentation-ranges.ts",
     "type-check": "echo 'TypeScript type checking limited to colors.ts and unicode.ts due to legacy codebase complexity' && tsc --noEmit",
     "type-check:strict": "tsc --project tsconfig.strict.json --noEmit",
     "lint": "eslint lib/",

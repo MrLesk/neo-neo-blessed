@@ -9,13 +9,58 @@
 // without eastAsianWidth and every width lookup throws in the ESM bundle.
 import eastasianwidth from 'eastasianwidth';
 import * as unicode from 'unicode-properties';
+import { emojiPresentationRanges } from './emoji-presentation-ranges.js';
 
 /**
  * Wide, Surrogates, and Combining
  */
 
+// Variation Selector-16 requests emoji presentation of the preceding
+// character, which makes terminals render that character two cells wide.
+const VS16 = 0xfe0f;
+
+/**
+ * True for code points with the Unicode `Emoji_Presentation` property, i.e.
+ * the ones terminals draw two cells wide without a variation selector.
+ *
+ * The `eastasianwidth` package reports these Neutral because its data
+ * predates Unicode 9, which reclassified emoji as Wide, so they have to be
+ * detected separately. See lib/emoji-presentation-ranges.ts.
+ */
+function isEmojiPresentation(point: number): boolean {
+  let lo = 0;
+  let hi = emojiPresentationRanges.length - 1;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const range = emojiPresentationRanges[mid]!;
+    if (point < range[0]) {
+      hi = mid - 1;
+    } else if (point > range[1]) {
+      lo = mid + 1;
+    } else {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * True when the character starting at `index` is immediately followed by
+ * Variation Selector-16 (e.g. U+26A0 U+FE0F "warning sign" -> 2 cells).
+ */
+function hasVariationSelector16(
+  str: string,
+  index: number,
+  point: number
+): boolean {
+  return str.charCodeAt(index + (point > 0xffff ? 2 : 1)) === VS16;
+}
+
 function charWidth(str: string | number, i?: number): number {
-  const point = typeof str !== 'number' ? codePointAt(str, i || 0) : str;
+  const index = typeof str === 'number' ? 0 : i || 0;
+  const point = typeof str !== 'number' ? codePointAt(str, index) : str;
 
   // nul
   if (point === 0) return 0;
@@ -38,6 +83,17 @@ function charWidth(str: string | number, i?: number): number {
     unicode.getCategory(point) === 'Mc'
   ) {
     return 0;
+  }
+
+  // Emoji: two cells in every terminal that renders them, either because the
+  // code point defaults to emoji presentation or because VS16 asks for it.
+  // Note VS16 itself is a combining mark, so it already measured 0 above and
+  // the whole sequence comes out as 2.
+  if (
+    isEmojiPresentation(point) ||
+    (typeof str !== 'number' && hasVariationSelector16(str, index, point))
+  ) {
+    return 2;
   }
 
   // Use eastasianwidth package for proper width detection
@@ -191,7 +247,62 @@ function fromCodePoint(...codePoints: number[]): string {
 
 /**
  * Regexes for compatibility
+ *
+ * These drive layout (element.ts pads every match with a filler char so the
+ * double-width glyph does not eat its neighbour), so they have to agree with
+ * charWidth above - hence the emoji parts below are derived from the same
+ * Emoji_Presentation data.
  */
+
+function escapeUnit(codeUnit: number): string {
+  return '\\u' + codeUnit.toString(16).padStart(4, '0');
+}
+
+function unitRange(lo: number, hi: number): string {
+  return lo === hi ? escapeUnit(lo) : escapeUnit(lo) + '-' + escapeUnit(hi);
+}
+
+// BMP emoji (watch, star, check mark, ...) as character class members.
+const emojiBmpRanges = emojiPresentationRanges
+  .filter(([, hi]) => hi <= 0xffff)
+  .map(([lo, hi]) => unitRange(lo, hi))
+  .join('');
+
+// Astral emoji as surrogate pair alternatives: a code point range maps to one
+// alternative per high surrogate, since each high surrogate covers 0x400 code
+// points.
+function surrogatePairAlternatives([lo, hi]: readonly [
+  number,
+  number,
+]): string {
+  const parts: string[] = [];
+  let start = lo;
+
+  while (start <= hi) {
+    const high = 0xd800 + ((start - 0x10000) >> 10);
+    const blockEnd = Math.min(hi, ((start - 0x10000) | 0x3ff) + 0x10000);
+    const low = unitRange(
+      0xdc00 + ((start - 0x10000) & 0x3ff),
+      0xdc00 + ((blockEnd - 0x10000) & 0x3ff)
+    );
+    parts.push(escapeUnit(high) + '[' + low + ']');
+    start = blockEnd + 1;
+  }
+
+  return parts.join('|');
+}
+
+const emojiSurrogateSource = emojiPresentationRanges
+  .filter(([, hi]) => hi > 0xffff)
+  .map(surrogatePairAlternatives)
+  .join('|');
+
+// Any character followed by Variation Selector-16, which upgrades a
+// text-presentation character to a two-cell emoji (U+26A0 U+FE0F). Listed
+// before the plain wide alternatives so a redundant VS16 after an already
+// wide emoji is consumed by the same match instead of being left behind.
+const variationSelectorSource =
+  '[\\ud800-\\udbff][\\udc00-\\udfff]\\ufe0f|[\\s\\S]\\ufe0f';
 
 const chars = {
   // Double width characters that are _not_ surrogate pairs.
@@ -206,6 +317,7 @@ const chars = {
       '\\ufe30-\\ufe6f' + // CJK Compatibility Forms
       '\\uff00-\\uff60' + // Fullwidth Forms
       '\\uffe0-\\uffe6' +
+      emojiBmpRanges + // Emoji rendered two cells wide
       '])',
     'g'
   ),
@@ -213,6 +325,9 @@ const chars = {
   // All surrogate pair wide chars.
   swide: new RegExp(
     '(' +
+      // Emoji rendered two cells wide:
+      emojiSurrogateSource +
+      '|' +
       // 0x20000 - 0x2fffd:
       '[\\ud840-\\ud87f][\\udc00-\\udffd]' +
       '|' +
@@ -235,6 +350,8 @@ const charsWithAll = {
   ...chars,
   all: new RegExp(
     '(' +
+      variationSelectorSource +
+      '|' +
       chars.swide.source.slice(1, -1) +
       '|' +
       chars.wide.source.slice(1, -1) +
